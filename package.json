@@ -1,0 +1,16 @@
+{
+  "name": "mlb-edge-bench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Side-by-side latency benchmark of MLB's Stats API origin vs. a Cloudflare Worker edge layer, measured from the user's browser.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240821.1",
+    "typescript": "^5.5.4",
+    "wrangler": "^3.72.0"
+  }
+}

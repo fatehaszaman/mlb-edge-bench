@@ -1,0 +1,23 @@
+name = "mlb-edge-bench"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# One Durable Object per active gamePk. The DO holds live state and self-polls
+# MLB's GUMBO feed via the Alarms API, so upstream load is constant regardless
+# of viewer count.
+[[durable_objects.bindings]]
+name = "GAME_STATE"
+class_name = "GameStateDO"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameStateDO"]
+
+# Optional: wire up Analytics Engine in Phase 4. Leave commented until used.
+# [[analytics_engine_datasets]]
+# binding = "ANALYTICS"
+# dataset = "mlb_edge_bench"
+
+[observability]
+enabled = true
