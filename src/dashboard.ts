@@ -146,6 +146,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="row"><span>p99</span><span id="e-p99">—</span></div>
     <div class="row"><span>Last bytes</span><span id="e-bytes">—</span></div>
     <div class="row"><span>Edge region</span><span id="e-region">—</span></div>
+    <div class="row"><span>Cache hit rate</span><span id="e-hitrate">—</span></div>
     <div class="row"><span>Samples</span><span id="e-n">0</span></div>
     <canvas id="e-spark" class="spark" width="500" height="36"></canvas>
   </div>
@@ -196,6 +197,9 @@ export const DASHBOARD_HTML = `<!doctype html>
     if (eHist.length) {
       document.getElementById('e-bytes').textContent = fmtBytes(eHist[eHist.length - 1].bytes);
       document.getElementById('e-region').textContent = eHist[eHist.length - 1].region || '—';
+      const hits = eHist.filter(x => x.cache === 'HIT').length;
+      const rate = (hits / eHist.length) * 100;
+      document.getElementById('e-hitrate').textContent = rate.toFixed(0) + '% (' + hits + '/' + eHist.length + ')';
     }
     drawSpark('d-spark', dMs, getCSS('--direct'));
     drawSpark('e-spark', eMs, getCSS('--edge'));
@@ -258,9 +262,10 @@ export const DASHBOARD_HTML = `<!doctype html>
     fetch('/api/game/' + gameId + '/snapshot')
       .then(async r => {
         const text = await r.text();
+        const cache = r.headers.get('X-Cache');
         let obj = {};
         try { obj = JSON.parse(text); } catch {}
-        eHist.push({ ms: performance.now() - t1, bytes: text.length, region: obj.edgeRegion });
+        eHist.push({ ms: performance.now() - t1, bytes: text.length, region: obj.edgeRegion, cache: cache });
         if (eHist.length > 60) eHist.shift();
         applyScoreboard(obj);
         update();
