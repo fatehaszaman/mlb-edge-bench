@@ -58,7 +58,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   .row:last-child { border-bottom: none; }
   .row span:first-child { color: var(--muted); }
   .row span:last-child { font-variant-numeric: tabular-nums; }
-  .spark { width: 100%; height: 36px; margin-top: 12px; display: block; }
+  .spark { width: 100%; height: 32px; margin-top: 12px; display: block; }
   .method {
     color: var(--muted);
     font-size: 12px;
