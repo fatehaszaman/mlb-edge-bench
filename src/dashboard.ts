@@ -127,6 +127,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="row"><span>p99</span><span id="e-p99">—</span></div>
     <div class="row"><span>Last bytes</span><span id="e-bytes">—</span></div>
     <div class="row"><span>Edge region</span><span id="e-region">—</span></div>
+    <div class="row"><span>Upstream → fanout</span><span id="e-ratio">—</span></div>
     <div class="row"><span>Samples</span><span id="e-n">0</span></div>
     <canvas id="e-spark" class="spark" width="500" height="36"></canvas>
   </div>
@@ -240,8 +241,23 @@ export const DASHBOARD_HTML = `<!doctype html>
     if (e.key === 'Enter') restart();
   });
 
+  async function pollStats() {
+    try {
+      const r = await fetch('/api/game/' + gameId + '/stats');
+      if (!r.ok) return;
+      const s = await r.json();
+      const ratio = s.upstreamCount > 0
+        ? (s.fanoutCount / s.upstreamCount).toFixed(1) + ':1'
+        : '—';
+      document.getElementById('e-ratio').textContent =
+        s.upstreamCount + ' → ' + s.fanoutCount + ' (' + ratio + ')';
+    } catch {}
+  }
+
   tick();
+  pollStats();
   setInterval(tick, 5000);
+  setInterval(pollStats, 3000);
 })();
 </script>
 </body>
