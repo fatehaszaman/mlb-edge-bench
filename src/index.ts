@@ -1,3 +1,4 @@
+import { DASHBOARD_HTML } from './dashboard';
 import { GameSnapshot, extractSnapshot } from './snapshot';
 
 export interface Env {}
@@ -9,6 +10,12 @@ export default {
 
     if (request.method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders() });
+    }
+
+    if (url.pathname === '/' || url.pathname === '/index.html') {
+      return new Response(DASHBOARD_HTML, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      });
     }
 
     if (url.pathname === '/health') {
