@@ -123,6 +123,10 @@ function corsHeaders(cacheStatus?: string): HeadersInit {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    // Expose X-Cache so the dashboard can tally hit rate. Without this, browsers
+    // strip it on cross-origin reads (the dashboard reads it from same-origin
+    // here, but be explicit so the snapshot endpoint is correct anywhere.)
+    'Access-Control-Expose-Headers': 'X-Cache',
   };
   if (cacheStatus) h['X-Cache'] = cacheStatus;
   return h;
