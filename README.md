@@ -106,7 +106,9 @@ Each snapshot includes a closed-form `homeWinProbability` derived from inning, h
 ## Limitations & honest caveats
 
 - This is a personal exploration project, not a load test. The dashboard runs both fetches in parallel from the same browser, which is the realistic comparison a fan would experience.
-- Latency numbers depend heavily on your geographic distance from MLB's origin vs. your nearest Cloudflare colo. Run it from a few different locations to see the spread.
+- **Numbers are local to the viewer.** Latency depends heavily on your ISP, the route your packets take, and which Cloudflare colo Anycast lands you in. A user in Mumbai and a user in Newark will see very different absolute numbers from the same dashboard. Treat the spread between columns as the signal, not the absolute ms. A production version would log every request server-side via Analytics Engine and report percentiles across all real users.
+- **Cache hit rate is surfaced alongside latency** because latency without hit rate is misleading. A cold colo still pays the upstream cost; the dashboard shows the HIT/total ratio so you can tell which regime you're observing.
+- **p99, not just average.** p99 = the slowest 1 in 100 requests. For a live game feed updating every pitch, that's the user whose refresh stalls right when a runner crosses home. Average hides this. Tail latency is what fans actually notice.
 - The SSE channel is capped at 5 minutes per connection to stay polite to the free tier; the client reconnects automatically.
 - Win probability is approximate. Don't bet on it.
 

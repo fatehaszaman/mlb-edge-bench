@@ -160,6 +160,30 @@ export const DASHBOARD_HTML = `<!doctype html>
   Worker, backed by a 6-second <code>caches.default</code> cache that shares state
   across viewers in the same colo. Lower bytes also means faster decompression and
   parse on the client. p50/p95/p99 are computed over a rolling 60-sample window.
+
+  <p style="margin-top:12px"><strong>Caveat — these numbers are local to you.</strong>
+  Latency observed here is shaped by <em>your</em> ISP, the route your packets take,
+  and which Cloudflare colo Anycast happens to land you in. A user in Mumbai and a
+  user in Newark will see very different absolute numbers from the same dashboard.
+  Treat the spread between columns as the signal, not the absolute milliseconds. A
+  production-grade version of this would log every request server-side via Cloudflare
+  Analytics Engine and report percentiles across all real users — that's on the
+  roadmap.</p>
+
+  <p style="margin-top:12px"><strong>Cache hit rate matters.</strong> The edge column
+  surfaces hit rate because latency wins are misleading without it. If most requests
+  are misses, the Worker is still paying the upstream cost — the colo cache fronts
+  it, but a cold colo still hits MLB. With ~6-second TTL and steady polling, the hit
+  rate climbs quickly and most viewers from the same colo get HIT responses served
+  directly from edge memory. The miss latency is what the direct column would look
+  like with a slimmer payload; the hit latency is what the edge actually buys you.</p>
+
+  <p style="margin-top:12px"><strong>Why p99, not just average.</strong> p99 = the slowest
+  1 in 100 requests. For a live game feed updating every pitch, that's the user whose
+  refresh stalls right when a runner crosses home. Average latency hides this — a
+  service with great average and bad p99 still feels broken to the unlucky 1%. Tail
+  latency is what fans actually notice, and it's the metric edge networks are
+  designed to compress.</p>
 </div>
 
 <script>
