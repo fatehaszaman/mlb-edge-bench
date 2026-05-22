@@ -1,19 +1,23 @@
 # MLB Edge Bench
 
-**A side-by-side latency benchmark of MLB's Stats API origin vs. a Cloudflare edge layer, serving the same live game data — measured from your browser.**
+**One upstream poll per game per 6 seconds, fanned out to every viewer in the world from the nearest Cloudflare colo — with a live latency benchmark against MLB's origin as proof.**
 
 > **Live demo:** [mlb-edge-bench.fatehaszaman.workers.dev](https://mlb-edge-bench.fatehaszaman.workers.dev)
+
+![dashboard](docs/dashboard.png)
 
 ---
 
 ## What it is
 
-Open the dashboard and you see two columns observing the same MLB game.
+The centerpiece is a fan-out pattern. A single Durable Object per `gamePk` polls MLB's GUMBO feed every 6 seconds, diffs it against the previous snapshot, and serves the slimmed result to every subscriber over Server-Sent Events. The upstream-to-fanout ratio is **1:N**, regardless of whether one fan or ten thousand fans are watching the same game. The free-tier deploy on `main` drops the DO and uses `caches.default` per-colo — same fan-out shape, scoped to the colo instead of global. The full DO+SSE version lives on the [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) branch.
+
+The benchmark dashboard is the proof. Two columns, same game, same browser:
 
 - The **left** column calls `statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live` directly from your browser.
-- The **right** column subscribes via Server-Sent Events to a Cloudflare Worker, which serves a slimmed snapshot of the same data from the edge.
+- The **right** column hits the Cloudflare Worker's slimmed snapshot endpoint (free tier) or subscribes via SSE (paid tier).
 
-Both columns display p50/p95/p99 latency, byte counts, the Cloudflare colo serving you, and a live sparkline. The numbers are real — they come from your own browser's `performance.now()` across a rolling 60-sample window.
+Both columns display p50/p95/p99 latency, byte counts, cache hit rate, the Cloudflare colo serving you, and a live sparkline. The numbers are real — they come from your own browser's `performance.now()` across a rolling 60-sample window.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -101,7 +105,9 @@ p50/p95/p99 on the direct column are computed over a rolling 60-sample window. T
 
 ## Win probability
 
-Each snapshot includes a closed-form `homeWinProbability` derived from inning, half, outs, base state, and score differential. It's intentionally **not** the centerpiece — the centerpiece is the delivery layer. The function is structured so a Retrosheet-fitted lookup table can swap in without touching the Worker or DO.
+`homeWinProbability` is my own closed-form approximation, not pulled from the GUMBO feed. MLB's feed doesn't expose a WP field on most endpoints, and the ones that do are derived server-side from a different model. I wanted the snapshot to be self-contained, so [`src/snapshot.ts`](src/snapshot.ts) computes it from inning, half, outs, base state, and run differential — plus walk-off edge cases that are mathematically decided.
+
+It's intentionally **not** the centerpiece. The centerpiece is the delivery layer. The function is structured so a Retrosheet-fitted lookup table (or a real model) can swap in without touching the Worker or DO.
 
 ## Limitations & honest caveats
 
