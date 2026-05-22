@@ -1,5 +1,6 @@
-// The dashboard is served inline by the Worker. Kept as a single string so the
-// Worker has zero static-asset binding requirements — wrangler deploy is enough.
+// The dashboard is served inline by the Worker. Free-tier build: both columns
+// poll every 5 seconds. The edge column hits the Worker's /snapshot endpoint,
+// which is backed by a 6-second `caches.default` cache.
 
 export const DASHBOARD_HTML = `<!doctype html>
 <html lang="en">
@@ -89,21 +90,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     font-size: 13px;
   }
   .game-pick button:hover { filter: brightness(1.1); }
-  .pill {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: #1a1f2b;
-    border: 1px solid #2a2f3b;
-    color: var(--muted);
-    font-size: 11px;
-  }
-  .pill.live { color: var(--edge); border-color: #2d4a3a; }
-  .scoreboard {
-    color: var(--muted);
-    font-size: 13px;
-    margin-top: 6px;
-  }
+  .scoreboard { color: var(--muted); font-size: 13px; margin-top: 6px; }
   .wp-bar {
     width: 100%;
     height: 6px;
@@ -111,6 +98,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     border-radius: 3px;
     overflow: hidden;
     margin-top: 8px;
+    max-width: 1100px;
   }
   .wp-bar > div {
     height: 100%;
@@ -133,7 +121,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   <span class="sub" style="margin:0">Try a recent gamePk from
     <a href="https://statsapi.mlb.com/api/v1/schedule?sportId=1" target="_blank" rel="noopener">today's schedule</a>
   </span>
-  <span id="status-pill" class="pill">idle</span>
 </div>
 
 <div id="scoreboard" class="scoreboard"></div>
@@ -147,34 +134,31 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="row"><span>p95</span><span id="d-p95">—</span></div>
     <div class="row"><span>p99</span><span id="d-p99">—</span></div>
     <div class="row"><span>Last bytes</span><span id="d-bytes">—</span></div>
-    <div class="row"><span>Origin</span><span>statsapi.mlb.com (single origin)</span></div>
+    <div class="row"><span>Origin</span><span>statsapi.mlb.com</span></div>
     <div class="row"><span>Samples</span><span id="d-n">0</span></div>
     <canvas id="d-spark" class="spark" width="500" height="36"></canvas>
   </div>
 
   <div class="col edge">
-    <h2>EDGE · Cloudflare Worker (SSE)</h2>
-    <div class="row"><span>Avg latency</span><span id="e-p50">—</span></div>
-    <div class="row"><span>Avg bytes / update</span><span id="e-bytes">—</span></div>
-    <div class="row"><span>Total bytes (60 updates)</span><span id="e-total">—</span></div>
+    <h2>EDGE · Cloudflare Worker</h2>
+    <div class="row"><span>p50</span><span id="e-p50">—</span></div>
+    <div class="row"><span>p95</span><span id="e-p95">—</span></div>
+    <div class="row"><span>p99</span><span id="e-p99">—</span></div>
+    <div class="row"><span>Last bytes</span><span id="e-bytes">—</span></div>
     <div class="row"><span>Edge region</span><span id="e-region">—</span></div>
-    <div class="row"><span>Upstream → fanout</span><span id="e-ratio">—</span></div>
-    <div class="row"><span>Updates received</span><span id="e-n">0</span></div>
+    <div class="row"><span>Samples</span><span id="e-n">0</span></div>
     <canvas id="e-spark" class="spark" width="500" height="36"></canvas>
   </div>
 
 </div>
 
 <div class="method">
-  <strong>Methodology.</strong> Both columns observe the same game from the same client.
-  The direct column issues <code>fetch()</code> requests every 5 seconds to MLB's full
-  GUMBO feed (~400–500 KB). The edge column subscribes via Server-Sent Events to a
-  Cloudflare Worker, which reads in-memory state from a Durable Object that polls MLB
-  once per 6 seconds via the Alarms API. Each SSE message after the initial snapshot
-  is a structural diff of just the fields that changed, so the per-update byte count
-  is typically under a few hundred bytes. p50/p95/p99 are computed over the most
-  recent 60 samples per column. Lower bytes also means faster decompression and parse
-  on the client.
+  <strong>Methodology.</strong> Both columns issue parallel <code>fetch()</code> requests
+  every 5 seconds from this browser. The direct path returns MLB's full GUMBO feed
+  (~400–800 KB). The edge path returns a slimmed snapshot served from a Cloudflare
+  Worker, backed by a 6-second <code>caches.default</code> cache that shares state
+  across viewers in the same colo. Lower bytes also means faster decompression and
+  parse on the client. p50/p95/p99 are computed over a rolling 60-sample window.
 </div>
 
 <script>
@@ -182,8 +166,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   let dHist = [];
   let eHist = [];
   let gameId = document.getElementById('gameId').value || '823545';
-  let es = null;
-  let statsTimer = null;
   let scoreboardState = null;
 
   function pct(arr, p) {
@@ -198,32 +180,25 @@ export const DASHBOARD_HTML = `<!doctype html>
     if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB';
     return (b / (1024 * 1024)).toFixed(2) + ' MB';
   }
-  function avg(arr) {
-    if (!arr.length) return null;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-  }
 
   function update() {
     const dMs = dHist.map(x => x.ms);
+    const eMs = eHist.map(x => x.ms);
     document.getElementById('d-p50').textContent = fmtMs(pct(dMs, 0.5));
     document.getElementById('d-p95').textContent = fmtMs(pct(dMs, 0.95));
     document.getElementById('d-p99').textContent = fmtMs(pct(dMs, 0.99));
+    document.getElementById('e-p50').textContent = fmtMs(pct(eMs, 0.5));
+    document.getElementById('e-p95').textContent = fmtMs(pct(eMs, 0.95));
+    document.getElementById('e-p99').textContent = fmtMs(pct(eMs, 0.99));
     document.getElementById('d-n').textContent = dHist.length;
-    if (dHist.length) {
-      document.getElementById('d-bytes').textContent = fmtBytes(dHist[dHist.length - 1].bytes);
-    }
-
-    const eBytes = eHist.map(x => x.bytes);
-    document.getElementById('e-p50').textContent = fmtMs(avg(eHist.map(x => x.ms).filter(v => v > 0)));
-    document.getElementById('e-bytes').textContent = fmtBytes(avg(eBytes));
-    document.getElementById('e-total').textContent = fmtBytes(eBytes.reduce((a, b) => a + b, 0));
     document.getElementById('e-n').textContent = eHist.length;
+    if (dHist.length) document.getElementById('d-bytes').textContent = fmtBytes(dHist[dHist.length - 1].bytes);
     if (eHist.length) {
+      document.getElementById('e-bytes').textContent = fmtBytes(eHist[eHist.length - 1].bytes);
       document.getElementById('e-region').textContent = eHist[eHist.length - 1].region || '—';
     }
-
     drawSpark('d-spark', dMs, getCSS('--direct'));
-    drawSpark('e-spark', eBytes, getCSS('--edge'));
+    drawSpark('e-spark', eMs, getCSS('--edge'));
   }
 
   function getCSS(name) {
@@ -233,7 +208,6 @@ export const DASHBOARD_HTML = `<!doctype html>
   function drawSpark(id, data, color) {
     const c = document.getElementById(id);
     const ctx = c.getContext('2d');
-    // Resize for crispness
     const dpr = window.devicePixelRatio || 1;
     const w = c.clientWidth || 500;
     const h = c.clientHeight || 36;
@@ -265,20 +239,11 @@ export const DASHBOARD_HTML = `<!doctype html>
       ' &middot; ' + half + ' ' + (scoreboardState.inning ?? 1) +
       ', ' + (scoreboardState.outs ?? 0) + ' out' +
       ' &middot; Home WP ' + wp.toFixed(1) + '%' +
-      ' &middot; <span class="pill ' + (isLive(scoreboardState.status) ? 'live' : '') + '">' +
-      (scoreboardState.status || 'unknown') + '</span>';
+      ' &middot; ' + (scoreboardState.status || 'unknown');
     document.getElementById('wp-fill').style.width = wp.toFixed(1) + '%';
-    document.getElementById('status-pill').textContent =
-      isLive(scoreboardState.status) ? 'streaming' : 'idle';
-    document.getElementById('status-pill').className =
-      'pill ' + (isLive(scoreboardState.status) ? 'live' : '');
-  }
-  function isLive(status) {
-    if (!status) return false;
-    return !['Final', 'Game Over', 'Completed Early', 'Postponed', 'Scheduled'].includes(status);
   }
 
-  function tickDirect() {
+  function tick() {
     const t0 = performance.now();
     fetch('https://statsapi.mlb.com/api/v1.1/game/' + gameId + '/feed/live')
       .then(async r => {
@@ -288,49 +253,25 @@ export const DASHBOARD_HTML = `<!doctype html>
         update();
       })
       .catch(() => {});
-  }
 
-  function openStream() {
-    if (es) es.close();
-    es = new EventSource('/api/game/' + gameId + '/stream');
-    es.onmessage = (ev) => {
-      const t = performance.now();
-      let msg;
-      try { msg = JSON.parse(ev.data); } catch { return; }
-      const region = (msg.payload && msg.payload.edgeRegion) || (scoreboardState && scoreboardState.edgeRegion) || '—';
-      eHist.push({
-        ms: msg.type === 'full' ? (msg.payload && msg.payload.edgeLatencyMs) || 0 : 0,
-        bytes: ev.data.length,
-        region: region,
-      });
-      if (eHist.length > 60) eHist.shift();
-      applyScoreboard(msg.payload || {});
-      update();
-    };
-    es.onerror = () => {
-      // EventSource auto-reconnects; surface state in pill
-      document.getElementById('status-pill').textContent = 'reconnecting';
-    };
-  }
-
-  async function pollStats() {
-    try {
-      const r = await fetch('/api/game/' + gameId + '/stats');
-      if (!r.ok) return;
-      const s = await r.json();
-      const ratio = s.upstreamCount > 0
-        ? (s.fanoutCount / s.upstreamCount).toFixed(1) + ':1'
-        : '—';
-      document.getElementById('e-ratio').textContent =
-        s.upstreamCount + ' → ' + s.fanoutCount + ' (' + ratio + ')';
-    } catch {}
+    const t1 = performance.now();
+    fetch('/api/game/' + gameId + '/snapshot')
+      .then(async r => {
+        const text = await r.text();
+        let obj = {};
+        try { obj = JSON.parse(text); } catch {}
+        eHist.push({ ms: performance.now() - t1, bytes: text.length, region: obj.edgeRegion });
+        if (eHist.length > 60) eHist.shift();
+        applyScoreboard(obj);
+        update();
+      })
+      .catch(() => {});
   }
 
   function restart() {
-    gameId = document.getElementById('gameId').value || '746429';
+    gameId = document.getElementById('gameId').value || '823545';
     dHist = []; eHist = []; scoreboardState = null;
     update();
-    openStream();
   }
 
   document.getElementById('switchBtn').addEventListener('click', restart);
@@ -338,14 +279,8 @@ export const DASHBOARD_HTML = `<!doctype html>
     if (e.key === 'Enter') restart();
   });
 
-  // Boot
-  tickDirect();
-  openStream();
-  pollStats();
-  setInterval(tickDirect, 5000);
-  statsTimer = setInterval(pollStats, 3000);
-  // Periodic spark refresh in case of long idle
-  setInterval(update, 1000);
+  tick();
+  setInterval(tick, 5000);
 })();
 </script>
 </body>
