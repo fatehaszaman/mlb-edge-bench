@@ -2,8 +2,7 @@
 
 **A side-by-side latency benchmark of MLB's Stats API origin vs. a Cloudflare edge layer, serving the same live game data — measured from your browser.**
 
-> **Live demo:** `https://mlb-edge-bench.<your-handle>.workers.dev/`
-> *(deploy with `wrangler deploy`; see [Develop](#develop) below)*
+> **Live demo:** [mlb-edge-bench.fatehaszaman.workers.dev](https://mlb-edge-bench.fatehaszaman.workers.dev)
 
 ---
 
