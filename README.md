@@ -116,7 +116,7 @@ It's intentionally **not** the centerpiece. The centerpiece is the delivery laye
 - **Cache hit rate is surfaced alongside latency** because latency without hit rate is misleading. A cold colo still pays the upstream cost; the dashboard shows the HIT/total ratio so you can tell which regime you're observing.
 - **p99, not just average.** p99 = the slowest 1 in 100 requests. For a live game feed updating every pitch, that's the user whose refresh stalls right when a runner crosses home. Average hides this. Tail latency is what fans actually notice.
 - The SSE channel is capped at 5 minutes per connection to stay polite to the free tier; the client reconnects automatically.
-- Win probability is approximate. Don't bet on it.
+- Win probability is approximate and should not be used for decision-making.
 
 ## Develop
 
