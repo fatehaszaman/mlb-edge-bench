@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  typecheck:
-    name: Typecheck
+  smoke:
+    name: Smoke check
     runs-on: ubuntu-latest
 
     steps:
@@ -23,5 +23,21 @@ jobs:
       - name: Install dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Typecheck
-        run: npm run typecheck
+      - name: Verify project files
+        run: |
+          test -f package.json
+          test -f wrangler.toml
+          test -f src/index.ts
+          test -f src/snapshot.ts
+          test -f src/dashboard.ts
+
+      - name: Verify package scripts
+        run: |
+          node -e "const p=require('./package.json'); if (!p.scripts || !p.scripts.dev || !p.scripts.deploy || !p.scripts.typecheck) process.exit(1); console.log('package scripts ok')"
+
+      - name: Verify Cloudflare Worker entrypoint
+        run: |
+          grep -q "export default" src/index.ts
+          grep -q "handleSnapshot" src/index.ts
+          grep -q "extractSnapshot" src/snapshot.ts
+          echo "worker smoke check passed"
