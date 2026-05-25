@@ -1,5 +1,7 @@
 # MLB Edge Bench
 
+[![CI](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml)
+
 **One upstream poll per game per 6 seconds, fanned out to every viewer in the world from the nearest Cloudflare colo — with a live latency benchmark against MLB's origin as proof.**
 
 > **Live demo:** [mlb-edge-bench.fatehaszaman.workers.dev](https://mlb-edge-bench.fatehaszaman.workers.dev)
