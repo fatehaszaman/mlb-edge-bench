@@ -95,6 +95,10 @@ export function computeDiff(
   prev: Record<string, any>,
   curr: Record<string, any>
 ): Record<string, any> {
+  // Time: O(K+B) for K current keys and B serialized characters.
+  // Memory: O(K+M) auxiliary; M is the largest serialized pair.
+  // Pseudocode: serialize both values per current key; retain unequal values.
+  // Removed keys are not emitted; see docs/ALGORITHM_GUIDE.md.
   const diff: Record<string, any> = {};
   for (const key of Object.keys(curr)) {
     if (JSON.stringify(prev[key]) !== JSON.stringify(curr[key])) {
