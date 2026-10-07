@@ -35,6 +35,9 @@ jobs:
         run: |
           node -e "const p=require('./package.json'); if (!p.scripts || !p.scripts.dev || !p.scripts.deploy || !p.scripts.typecheck) process.exit(1); console.log('package scripts ok')"
 
+      - name: Type check
+        run: npm run typecheck
+
       - name: Verify Cloudflare Worker entrypoint
         run: |
           grep -q "export default" src/index.ts

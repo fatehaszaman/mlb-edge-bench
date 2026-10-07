@@ -4,11 +4,20 @@
 
 [![CI](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml)
 
-**One upstream poll per game per 6 seconds, fanned out to every viewer in the world from the nearest Cloudflare colo — with a live latency benchmark against MLB's origin as proof.**
+**A browser-based benchmark comparing MLB's Stats API origin with a Cloudflare Worker edge layer: latency, payload size and cache hit rate, measured live from your own browser.**
 
 > **Live demo:** [mlb-edge-bench.fatehaszaman.workers.dev](https://mlb-edge-bench.fatehaszaman.workers.dev)
 
 ![dashboard](docs/dashboard.png)
+
+## Builds
+
+| Build | Branch | Status | How fan-out works |
+|---|---|---|---|
+| Edge cache (free tier) | `main` | **Live** at the demo link | The Worker slims the GUMBO feed and stores it in `caches.default`, so roughly one upstream request per game per 6 seconds **per Cloudflare colo**. Viewers poll the snapshot endpoint. |
+| Durable Objects + SSE (paid tier) | [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) | Not deployed | One Durable Object per `gamePk` polls upstream every 6 seconds and pushes diffs to every subscriber over Server-Sent Events, giving one upstream request per game globally. `/api/game/:id/stats` and `/stream` exist only on this branch. |
+
+The architecture and wire-format sections below describe the paid-tier design. The ASCII dashboard is illustrative, not a recorded run. On the live build, p50/p95/p99 are computed for the direct column; the edge column reports average latency.
 
 ---
 
@@ -87,7 +96,7 @@ The framing is exploratory, not a critique. MLB's Stats API is a well-built sing
 | **Server-Sent Events** | Push structural diffs to dashboard clients |
 | **`request.cf` geolocation** | Surface which colo served each request |
 
-The key architectural property: regardless of how many fans are watching a given game, **exactly one upstream request hits `statsapi.mlb.com` per game per 6 seconds.** The DO fans out its in-memory state to every viewer. The `/api/game/:id/stats` endpoint exposes the upstream-to-fanout ratio in real time, and the dashboard surfaces it.
+The key architectural property of the paid-tier build: regardless of how many fans are watching a given game, **exactly one upstream request hits `statsapi.mlb.com` per game per 6 seconds.** The DO fans out its in-memory state to every viewer. The `/api/game/:id/stats` endpoint exposes the upstream-to-fanout ratio in real time, and the dashboard surfaces it.
 
 ### What's on the wire
 
@@ -143,9 +152,9 @@ src/
   index.ts        Worker entry + routes + GameStateDO
   snapshot.ts     Pure functions: GUMBO → slimmed snapshot, WP, diffs
   dashboard.ts    Inline HTML + JS for the benchmark page
-wrangler.toml     Worker + Durable Object bindings
+wrangler.toml     Worker config (Durable Object bindings are on the paid-tier branch)
 ```
 
 ## License
 
-MIT
+MIT. See [LICENSE](LICENSE).
