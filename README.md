@@ -30,7 +30,7 @@ The benchmark dashboard is the proof. Two columns, same game, same browser:
 - The **left** column calls `statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live` directly from your browser.
 - The **right** column hits the Cloudflare Worker's slimmed snapshot endpoint (free tier) or subscribes via SSE (paid tier).
 
-Both columns display p50/p95/p99 latency, byte counts, cache hit rate, the Cloudflare colo serving you, and a live sparkline. The numbers are real — they come from your own browser's `performance.now()` across a rolling 60-sample window.
+The direct column reports p50/p95/p99 latency and payload size, while the edge column reports average latency, byte counts, cache hit rate, and the Cloudflare colo serving you, each paired with a live sparkline. The numbers are real and come from your own browser's `performance.now()` across a rolling 60-sample window.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
