@@ -23,7 +23,7 @@ The architecture and wire-format sections below describe the paid-tier design. T
 
 ## What it is
 
-The centerpiece is a fan-out pattern. A single Durable Object per `gamePk` polls MLB's GUMBO feed every 6 seconds, diffs it against the previous snapshot, and serves the slimmed result to every subscriber over Server-Sent Events. The upstream-to-fanout ratio is **1:N**, regardless of whether one fan or ten thousand fans are watching the same game. The free-tier deploy on `main` drops the DO and uses `caches.default` per-colo — same fan-out shape, scoped to the colo instead of global. The full DO+SSE version lives on the [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) branch.
+The centerpiece is a fan-out pattern. A single Durable Object per `gamePk` polls MLB's GUMBO feed every 6 seconds, diffs it against the previous snapshot, and serves the slimmed result to every subscriber over Server-Sent Events. The upstream-to-fanout ratio is **1:N**, regardless of whether one fan or ten thousand fans are watching the same game. The free-tier deploy on `main` drops the DO and uses `caches.default` per-colo - same fan-out shape, scoped to the colo instead of global. The full DO+SSE version lives on the [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) branch.
 
 The benchmark dashboard is the proof. Two columns, same game, same browser:
 
@@ -50,7 +50,7 @@ The direct column reports p50/p95/p99 latency and payload size, while the edge c
 
 ## Why
 
-I was curious how much an edge layer would actually save for live MLB game data, measured end-to-end from a real client. The full GUMBO feed for one game is ~400–800 KB and updates every few seconds. The interesting question wasn't "can I cache it on the edge" — that's obvious. It was **"what does the edge actually buy you when measured the way a fan would experience it."** So I built a benchmark that runs both calls from the same client and surfaces the diff.
+I was curious how much an edge layer would actually save for live MLB game data, measured end-to-end from a real client. The full GUMBO feed for one game is ~400–800 KB and updates every few seconds. The interesting question wasn't "can I cache it on the edge" - that's obvious. It was **"what does the edge actually buy you when measured the way a fan would experience it."** So I built a benchmark that runs both calls from the same client and surfaces the diff.
 
 The framing is exploratory, not a critique. MLB's Stats API is a well-built single-origin service that's served fans well for a long time. This is one engineer engaging with a question that the people running mlb.com's edge already think about.
 
@@ -112,13 +112,13 @@ The key architectural property of the paid-tier build: regardless of how many fa
 Both columns observe the same game from the same client.
 
 - The **direct** column issues `fetch()` requests every 5 seconds and measures end-to-end latency with `performance.now()`.
-- The **edge** column subscribes to the Worker's SSE stream once. The first message is a full snapshot; subsequent messages are structural diffs of just the fields that changed since the last sample. Per-message bytes are measured from the raw event data.
+- The **edge** column polls the Worker's cached `/snapshot` endpoint on the live free-tier build (`main`), or subscribes to the Worker's SSE `/stream` endpoint on the `paid-tier` branch (where the first message is a full snapshot and subsequent messages are structural diffs). Per-message bytes are measured from the raw payload.
 
 p50/p95/p99 on the direct column are computed over a rolling 60-sample window. The edge column reports average latency (round-trip time isn't strictly comparable for an open SSE channel) and average / total bytes per update.
 
 ## Win probability
 
-`homeWinProbability` is my own closed-form approximation, not pulled from the GUMBO feed. MLB's feed doesn't expose a WP field on most endpoints, and the ones that do are derived server-side from a different model. I wanted the snapshot to be self-contained, so [`src/snapshot.ts`](src/snapshot.ts) computes it from inning, half, outs, base state, and run differential — plus walk-off edge cases that are mathematically decided.
+`homeWinProbability` is my own closed-form approximation, not pulled from the GUMBO feed. MLB's feed doesn't expose a WP field on most endpoints, and the ones that do are derived server-side from a different model. I wanted the snapshot to be self-contained, so [`src/snapshot.ts`](src/snapshot.ts) computes it from inning, half, outs, base state, and run differential - plus walk-off edge cases that are mathematically decided.
 
 It's intentionally **not** the centerpiece. The centerpiece is the delivery layer. The function is structured so a Retrosheet-fitted lookup table (or a real model) can swap in without touching the Worker or DO.
 
