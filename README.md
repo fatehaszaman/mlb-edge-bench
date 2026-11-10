@@ -17,7 +17,7 @@
 | Edge cache (free tier) | `main` | **Live** at the demo link | The Worker slims the GUMBO feed and stores it in `caches.default`, so roughly one upstream request per game per 6 seconds **per Cloudflare colo**. Viewers poll the snapshot endpoint. |
 | Durable Objects + SSE (paid tier) | [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) | Not deployed | One Durable Object per `gamePk` polls upstream every 6 seconds and pushes diffs to every subscriber over Server-Sent Events, giving one upstream request per game globally. `/api/game/:id/stats` and `/stream` exist only on this branch. |
 
-The architecture and wire-format sections below describe the paid-tier design. The ASCII dashboard is illustrative, not a recorded run. On the live build, p50/p95/p99 are computed for the direct column; the edge column reports average latency.
+The architecture and wire-format sections below describe the paid-tier design. The ASCII dashboard is illustrative, not a recorded run. On the live build, p50/p95/p99 are computed for the direct column; the edge column reports p50/p95/p99 latency, bytes, cache hit rate and serving location.
 
 ---
 
@@ -30,7 +30,7 @@ The benchmark dashboard is the proof. Two columns, same game, same browser:
 - The **left** column calls `statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live` directly from your browser.
 - The **right** column hits the Cloudflare Worker's slimmed snapshot endpoint (free tier) or subscribes via SSE (paid tier).
 
-The direct column reports p50/p95/p99 latency and payload size, while the edge column reports average latency, byte counts, cache hit rate, and the Cloudflare colo serving you, each paired with a live sparkline. The numbers are real and come from your own browser's `performance.now()` across a rolling 60-sample window.
+The direct column reports p50/p95/p99 latency and payload size, while the edge column reports p50/p95/p99 latency, bytes, cache hit rate and serving location, each paired with a live sparkline. The numbers are real and come from your own browser's `performance.now()` across a rolling 60-sample window.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
