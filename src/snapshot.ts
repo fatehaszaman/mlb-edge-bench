@@ -72,14 +72,18 @@ export function winProbability(
   baseState: string,
   runDiff: number
 ): number {
-  // Walk-off / mathematically decided edge cases.
+  // Decided edge case: in the bottom of the 9th or later, a home lead ends
+  // the game (walk-off). The top half of any inning is never decided here,
+  // because the home team still bats in the bottom half.
   if (inning >= 9 && half === 'B' && runDiff > 0) return 1.0;
 
   const inningWeight = Math.min(1, inning / 9);
   const runValue = 0.08 + inningWeight * 0.12;
 
   let wp = 0.5 + runDiff * runValue;
-  wp += (outs - 1) * 0.02 * Math.sign(runDiff);
+  // Outs hurt the batting team: in the top half the away team bats, so each
+  // out helps home; in the bottom half each out hurts home.
+  wp += (half === 'T' ? 1 : -1) * outs * 0.02;
 
   const runners = baseState.split('').filter((b) => b === '1').length;
   const battingBoost = runners * 0.03;

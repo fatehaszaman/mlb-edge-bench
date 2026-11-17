@@ -114,7 +114,7 @@ Both columns observe the same game from the same client.
 - The **direct** column issues `fetch()` requests every 5 seconds and measures end-to-end latency with `performance.now()`.
 - The **edge** column polls the Worker's cached `/snapshot` endpoint on the live free-tier build (`main`), or subscribes to the Worker's SSE `/stream` endpoint on the `paid-tier` branch (where the first message is a full snapshot and subsequent messages are structural diffs). Per-message bytes are measured from the raw payload.
 
-p50/p95/p99 on the direct column are computed over a rolling 60-sample window. The edge column reports average latency (round-trip time isn't strictly comparable for an open SSE channel) and average / total bytes per update.
+p50/p95/p99 are computed over a rolling 60-sample window for both columns on the live build. On the `paid-tier` SSE build, round-trip time isn't strictly comparable for an open channel, so that build reports average latency and average / total bytes per update.
 
 ## Win probability
 
@@ -129,7 +129,7 @@ It's intentionally **not** the centerpiece. The centerpiece is the delivery laye
 - **Cache hit rate is surfaced alongside latency** because latency without hit rate is misleading. A cold colo still pays the upstream cost; the dashboard shows the HIT/total ratio so you can tell which regime you're observing.
 - **p99, not just average.** p99 = the slowest 1 in 100 requests. For a live game feed updating every pitch, that's the user whose refresh stalls right when a runner crosses home. Average hides this. Tail latency is what fans actually notice.
 - The SSE channel is capped at 5 minutes per connection to stay polite to the free tier; the client reconnects automatically.
-- Win probability is approximate and should not be used for decision-making.
+- Win probability is approximate and should not be used for decision-making. Unit tests in `test/` pin its decided states (a home lead in the bottom of the 9th or later), bounds, monotonicity in run differential, and the direction of an out.
 
 ## Develop
 

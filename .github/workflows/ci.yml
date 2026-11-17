@@ -38,6 +38,9 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       - name: Verify Cloudflare Worker entrypoint
         run: |
           grep -q "export default" src/index.ts
