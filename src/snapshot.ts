@@ -74,7 +74,6 @@ export function winProbability(
 ): number {
   // Walk-off / mathematically decided edge cases.
   if (inning >= 9 && half === 'B' && runDiff > 0) return 1.0;
-  if (inning > 9 && half === 'T' && runDiff < 0) return 0.0;
 
   const inningWeight = Math.min(1, inning / 9);
   const runValue = 0.08 + inningWeight * 0.12;
