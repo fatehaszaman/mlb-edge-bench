@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { winProbability } from '../src/snapshot';
+import { winProbability, extractSnapshot } from '../src/snapshot';
 
 describe('winProbability', () => {
   it('home lead in the bottom of the 9th is a decided win', () => {
@@ -37,5 +37,37 @@ describe('winProbability', () => {
       .toBeGreaterThan(winProbability('T', 5, 0, '000', 0));
     expect(winProbability('B', 5, 2, '000', 0))
       .toBeLessThan(winProbability('B', 5, 0, '000', 0));
+  });
+});
+
+describe('extractSnapshot for finished games', () => {
+  const feed = (state: string, inningHalf: string, home: number, away: number) => ({
+    gameData: {
+      status: { abstractGameState: state, detailedState: state },
+      teams: { home: { name: 'Home' }, away: { name: 'Away' } },
+    },
+    liveData: {
+      linescore: {
+        currentInning: 9,
+        inningHalf,
+        outs: 3,
+        offense: {},
+        teams: { home: { runs: home }, away: { runs: away } },
+      },
+    },
+  });
+
+  it('a home win ending in the top of the 9th is 1', () => {
+    expect(extractSnapshot('1', feed('Final', 'Top', 3, 2), 'IAD', 0)?.homeWinProbability).toBe(1);
+  });
+
+  it('a home loss is 0', () => {
+    expect(extractSnapshot('1', feed('Final', 'Bottom', 1, 4), 'IAD', 0)?.homeWinProbability).toBe(0);
+  });
+
+  it('a live game still uses the in-game model', () => {
+    const wp = extractSnapshot('1', feed('Live', 'Top', 3, 2), 'IAD', 0)?.homeWinProbability;
+    expect(wp).toBeGreaterThan(0.5);
+    expect(wp).toBeLessThan(1);
   });
 });

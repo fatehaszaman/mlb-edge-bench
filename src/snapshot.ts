@@ -42,7 +42,12 @@ export function extractSnapshot(
     (offense.third ? '1' : '0');
 
   const runDiff = Math.max(-5, Math.min(5, homeScore - awayScore));
-  const homeWP = winProbability(halfInning, inning, outs, baseState, runDiff);
+  // A finished game is decided by the final score, not by the state of the
+  // last half-inning.
+  const isFinal = raw?.gameData?.status?.abstractGameState === 'Final';
+  const homeWP = isFinal
+    ? finalWinProbability(homeScore, awayScore)
+    : winProbability(halfInning, inning, outs, baseState, runDiff);
 
   return {
     gameId,
@@ -60,6 +65,14 @@ export function extractSnapshot(
     edgeRegion: colo,
     edgeLatencyMs: latencyMs,
   };
+}
+
+// Home win probability for a finished game: 1 for a home win, 0 for a home
+// loss, 0.5 for a tie (suspended or called games can end level).
+export function finalWinProbability(homeScore: number, awayScore: number): number {
+  if (homeScore > awayScore) return 1.0;
+  if (homeScore < awayScore) return 0.0;
+  return 0.5;
 }
 
 // Closed-form win probability approximation. Intentionally simple — the
