@@ -124,7 +124,7 @@ It's intentionally **not** the centerpiece. The centerpiece is the delivery laye
 
 ## Limitations & honest caveats
 
-- This is a personal exploration project, not a load test. The dashboard runs both fetches in parallel from the same browser, which is the realistic comparison a fan would experience.
+- This is a personal exploration project, not a load test. The dashboard runs the two fetches one after the other from the same browser, alternating which goes first, so the large direct download doesn't compete with the edge request for bandwidth.
 - **Numbers are local to the viewer.** Latency depends heavily on your ISP, the route your packets take, and which Cloudflare colo Anycast lands you in. A user in Mumbai and a user in Newark will see very different absolute numbers from the same dashboard. Treat the spread between columns as the signal, not the absolute ms. A production version would log every request server-side via Analytics Engine and report percentiles across all real users.
 - **Cache hit rate is surfaced alongside latency** because latency without hit rate is misleading. A cold colo still pays the upstream cost; the dashboard shows the HIT/total ratio so you can tell which regime you're observing.
 - **p99, not just average.** p99 = the slowest 1 in 100 requests. For a live game feed updating every pitch, that's the user whose refresh stalls right when a runner crosses home. Average hides this. Tail latency is what fans actually notice.

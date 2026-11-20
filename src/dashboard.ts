@@ -159,8 +159,10 @@ export const DASHBOARD_HTML = `<!doctype html>
 </div>
 
 <div class="method">
-  <strong>Methodology.</strong> Both columns issue parallel <code>fetch()</code> requests
-  every 5 seconds from this browser. The direct path returns MLB's full GUMBO feed
+  <strong>Methodology.</strong> Every 5 seconds this browser issues one <code>fetch()</code>
+  per column, one after the other, alternating which goes first. Running them in
+  sequence keeps the large direct download from competing with the edge request for
+  bandwidth. The direct path returns MLB's full GUMBO feed
   (~400–800 KB). The edge path returns a slimmed snapshot served from a Cloudflare
   Worker, backed by a 6-second <code>caches.default</code> cache (5 minutes once a
   game is Final) that shares state across viewers in the same colo. Both requests
@@ -290,30 +292,49 @@ export const DASHBOARD_HTML = `<!doctype html>
     document.getElementById('wp-fill').style.width = wp.toFixed(1) + '%';
   }
 
-  function tick() {
-    const t0 = performance.now();
-    fetch('https://statsapi.mlb.com/api/v1.1/game/' + gameId + '/feed/live', { cache: 'no-store' })
-      .then(async r => {
-        const text = await r.text();
-        dHist.push({ ms: performance.now() - t0, bytes: text.length });
-        if (dHist.length > 60) dHist.shift();
-        update();
-      })
-      .catch(() => {});
+  // Run the two fetches one after the other, never at the same time, so the
+  // ~750 KB direct download can't compete with the edge request for bandwidth.
+  // Alternate which goes first each tick so neither side always gets the
+  // warmer network. Skip a tick if the previous one is still running.
+  let running = false;
+  let directFirst = true;
 
+  async function measureDirect() {
+    const t0 = performance.now();
+    try {
+      const r = await fetch('https://statsapi.mlb.com/api/v1.1/game/' + gameId + '/feed/live', { cache: 'no-store' });
+      const text = await r.text();
+      dHist.push({ ms: performance.now() - t0, bytes: text.length });
+      if (dHist.length > 60) dHist.shift();
+      update();
+    } catch {}
+  }
+
+  async function measureEdge() {
     const t1 = performance.now();
-    fetch('/api/game/' + gameId + '/snapshot', { cache: 'no-store' })
-      .then(async r => {
-        const text = await r.text();
-        const cache = r.headers.get('X-Cache');
-        let obj = {};
-        try { obj = JSON.parse(text); } catch {}
-        eHist.push({ ms: performance.now() - t1, bytes: text.length, region: obj.edgeRegion, cache: cache });
-        if (eHist.length > 60) eHist.shift();
-        applyScoreboard(obj);
-        update();
-      })
-      .catch(() => {});
+    try {
+      const r = await fetch('/api/game/' + gameId + '/snapshot', { cache: 'no-store' });
+      const text = await r.text();
+      const cache = r.headers.get('X-Cache');
+      let obj = {};
+      try { obj = JSON.parse(text); } catch {}
+      eHist.push({ ms: performance.now() - t1, bytes: text.length, region: obj.edgeRegion, cache: cache });
+      if (eHist.length > 60) eHist.shift();
+      applyScoreboard(obj);
+      update();
+    } catch {}
+  }
+
+  async function tick() {
+    if (running) return;
+    running = true;
+    try {
+      if (directFirst) { await measureDirect(); await measureEdge(); }
+      else { await measureEdge(); await measureDirect(); }
+      directFirst = !directFirst;
+    } finally {
+      running = false;
+    }
   }
 
   function restart() {
