@@ -147,6 +147,8 @@ export const DASHBOARD_HTML = `<!doctype html>
     <div class="row"><span>p50</span><span id="e-p50">—</span></div>
     <div class="row"><span>p95</span><span id="e-p95">—</span></div>
     <div class="row"><span>p99</span><span id="e-p99">—</span></div>
+    <div class="row"><span>Hits p50 / p95</span><span id="e-hit">—</span></div>
+    <div class="row"><span>Misses p50 / p95</span><span id="e-miss">—</span></div>
     <div class="row"><span>Last bytes</span><span id="e-bytes">—</span></div>
     <div class="row"><span>Edge region</span><span id="e-region">—</span></div>
     <div class="row"><span>Cache hit rate</span><span id="e-hitrate">—</span></div>
@@ -182,7 +184,10 @@ export const DASHBOARD_HTML = `<!doctype html>
   it, but a cold colo still hits MLB. With a ~6-second TTL on live games and steady polling, the hit
   rate climbs quickly and most viewers from the same colo get HIT responses served
   directly from edge memory. The miss latency is what the direct column would look
-  like with a slimmer payload; the hit latency is what the edge actually buys you.</p>
+  like with a slimmer payload; the hit latency is what the edge actually buys you.
+  The edge column reports hits and misses as separate rows for that reason; the
+  combined p50/p95/p99 mixes the two. Misses are rare on Final games because they're
+  cached for 5 minutes, so that row can stay empty.</p>
 
   <p style="margin-top:12px"><strong>Why p99, not just average.</strong> p99 = the slowest
   1 in 100 requests. For a live game feed updating every pitch, that's the user whose
@@ -221,6 +226,14 @@ export const DASHBOARD_HTML = `<!doctype html>
     document.getElementById('e-p50').textContent = fmtMs(pct(eMs, 0.5));
     document.getElementById('e-p95').textContent = fmtMs(pct(eMs, 0.95));
     document.getElementById('e-p99').textContent = fmtMs(pct(eMs, 0.99));
+    // Hits and misses measure different things: a hit is what the edge buys
+    // you, a miss also pays the Worker's upstream fetch to MLB. Report both.
+    const hitMs = eHist.filter(x => x.cache === 'HIT').map(x => x.ms);
+    const missMs = eHist.filter(x => x.cache !== 'HIT').map(x => x.ms);
+    document.getElementById('e-hit').textContent =
+      fmtMs(pct(hitMs, 0.5)) + ' / ' + fmtMs(pct(hitMs, 0.95));
+    document.getElementById('e-miss').textContent =
+      fmtMs(pct(missMs, 0.5)) + ' / ' + fmtMs(pct(missMs, 0.95));
     document.getElementById('d-n').textContent = dHist.length;
     document.getElementById('e-n').textContent = eHist.length;
     if (dHist.length) document.getElementById('d-bytes').textContent = fmtBytes(dHist[dHist.length - 1].bytes);
