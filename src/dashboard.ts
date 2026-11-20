@@ -1,6 +1,9 @@
 // The dashboard is served inline by the Worker. Free-tier build: both columns
 // poll every 5 seconds. The edge column hits the Worker's /snapshot endpoint,
-// which is backed by a 6-second `caches.default` cache.
+// which is backed by a 6-second `caches.default` cache (5 minutes for Final
+// games). The direct fetch uses cache: 'no-store' because MLB's feed sends
+// max-age=10, which would otherwise let the browser answer some polls from its
+// own HTTP cache instead of the network.
 
 export const DASHBOARD_HTML = `<!doctype html>
 <html lang="en">
@@ -157,8 +160,12 @@ export const DASHBOARD_HTML = `<!doctype html>
   <strong>Methodology.</strong> Both columns issue parallel <code>fetch()</code> requests
   every 5 seconds from this browser. The direct path returns MLB's full GUMBO feed
   (~400–800 KB). The edge path returns a slimmed snapshot served from a Cloudflare
-  Worker, backed by a 6-second <code>caches.default</code> cache that shares state
-  across viewers in the same colo. Lower bytes also means faster decompression and
+  Worker, backed by a 6-second <code>caches.default</code> cache (5 minutes once a
+  game is Final) that shares state across viewers in the same colo. The direct request
+  uses <code>cache: 'no-store'</code> so every sample is a real network round trip:
+  MLB's feed sends <code>max-age=10</code>, and without this the browser would serve
+  some polls from its own cache. The edge response carries no cache headers, so the
+  browser never caches it. Lower bytes also means faster decompression and
   parse on the client. p50/p95/p99 are computed over a rolling 60-sample window.
 
   <p style="margin-top:12px"><strong>Caveat — these numbers are local to you.</strong>
@@ -173,7 +180,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <p style="margin-top:12px"><strong>Cache hit rate matters.</strong> The edge column
   surfaces hit rate because latency wins are misleading without it. If most requests
   are misses, the Worker is still paying the upstream cost — the colo cache fronts
-  it, but a cold colo still hits MLB. With ~6-second TTL and steady polling, the hit
+  it, but a cold colo still hits MLB. With a ~6-second TTL on live games and steady polling, the hit
   rate climbs quickly and most viewers from the same colo get HIT responses served
   directly from edge memory. The miss latency is what the direct column would look
   like with a slimmer payload; the hit latency is what the edge actually buys you.</p>
@@ -273,7 +280,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 
   function tick() {
     const t0 = performance.now();
-    fetch('https://statsapi.mlb.com/api/v1.1/game/' + gameId + '/feed/live')
+    fetch('https://statsapi.mlb.com/api/v1.1/game/' + gameId + '/feed/live', { cache: 'no-store' })
       .then(async r => {
         const text = await r.text();
         dHist.push({ ms: performance.now() - t0, bytes: text.length });

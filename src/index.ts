@@ -7,9 +7,9 @@
 //
 // Architecture (free tier)
 //   The Worker fetches MLB's GUMBO feed, extracts a slimmed snapshot, and
-//   caches it in `caches.default` for 6 seconds. Concurrent viewers from the
-//   same colo share the cache, so upstream load drops to ~1 request per game
-//   per 6s per colo. The Durable-Object-based fanout is on a separate branch
+//   caches it in `caches.default` for 6 seconds while the game is live (5
+//   minutes once it is Final). Concurrent viewers from the same colo share the
+//   cache, so upstream load drops to ~1 request per game per 6s per colo. The Durable-Object-based fanout is on a separate branch
 //   for when this graduates to the paid plan.
 
 import { GameSnapshot, extractSnapshot } from './snapshot';
@@ -19,6 +19,11 @@ export interface Env {}
 
 const MLB_FEED = (gameId: string) =>
   `https://statsapi.mlb.com/api/v1.1/game/${gameId}/feed/live`;
+
+// Live games keep a short TTL so the edge never serves data staler than MLB's
+// own 10s cache. A Final game no longer changes, so it can be held longer.
+const LIVE_TTL_SECONDS = 6;
+const FINAL_TTL_SECONDS = 300;
 
 export default {
   async fetch(
@@ -97,13 +102,16 @@ async function handleSnapshot(
       );
     }
 
+    const isFinal = raw?.gameData?.status?.abstractGameState === 'Final';
+    const ttl = isFinal ? FINAL_TTL_SECONDS : LIVE_TTL_SECONDS;
+
     const response = Response.json(snap, { headers: corsHeaders('MISS') });
     ctx.waitUntil(
       cache.put(
         cacheKey,
         new Response(JSON.stringify(snap), {
           headers: {
-            'Cache-Control': 'public, max-age=6',
+            'Cache-Control': `public, max-age=${ttl}`,
             'Content-Type': 'application/json',
           },
         })
