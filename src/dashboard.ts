@@ -1,9 +1,9 @@
 // The dashboard is served inline by the Worker. Free-tier build: both columns
 // poll every 5 seconds. The edge column hits the Worker's /snapshot endpoint,
 // which is backed by a 6-second `caches.default` cache (5 minutes for Final
-// games). The direct fetch uses cache: 'no-store' because MLB's feed sends
-// max-age=10, which would otherwise let the browser answer some polls from its
-// own HTTP cache instead of the network.
+// games). Both fetches use cache: 'no-store' so every sample is a network
+// round trip. MLB's feed sends max-age=10, which would otherwise let the
+// browser answer some direct polls from its own HTTP cache.
 
 export const DASHBOARD_HTML = `<!doctype html>
 <html lang="en">
@@ -161,11 +161,10 @@ export const DASHBOARD_HTML = `<!doctype html>
   every 5 seconds from this browser. The direct path returns MLB's full GUMBO feed
   (~400–800 KB). The edge path returns a slimmed snapshot served from a Cloudflare
   Worker, backed by a 6-second <code>caches.default</code> cache (5 minutes once a
-  game is Final) that shares state across viewers in the same colo. The direct request
-  uses <code>cache: 'no-store'</code> so every sample is a real network round trip:
-  MLB's feed sends <code>max-age=10</code>, and without this the browser would serve
-  some polls from its own cache. The edge response carries no cache headers, so the
-  browser never caches it. Lower bytes also means faster decompression and
+  game is Final) that shares state across viewers in the same colo. Both requests
+  use <code>cache: 'no-store'</code> so every sample is a real network round trip.
+  This matters for the direct path: MLB's feed sends <code>max-age=10</code>, and
+  without it the browser would serve some polls from its own cache. Lower bytes also means faster decompression and
   parse on the client. p50/p95/p99 are computed over a rolling 60-sample window.
 
   <p style="margin-top:12px"><strong>Caveat — these numbers are local to you.</strong>
@@ -290,7 +289,7 @@ export const DASHBOARD_HTML = `<!doctype html>
       .catch(() => {});
 
     const t1 = performance.now();
-    fetch('/api/game/' + gameId + '/snapshot')
+    fetch('/api/game/' + gameId + '/snapshot', { cache: 'no-store' })
       .then(async r => {
         const text = await r.text();
         const cache = r.headers.get('X-Cache');

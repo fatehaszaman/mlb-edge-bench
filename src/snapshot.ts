@@ -67,6 +67,19 @@ export function extractSnapshot(
   };
 }
 
+// Edge cache TTL for a snapshot. Live games keep a short TTL so the edge never
+// serves data staler than MLB's own 10s cache. A Final game no longer changes,
+// so it can be held longer. Keyed on abstractGameState, not detailedState,
+// because finished games can read "Game Over" or "Completed Early" there.
+export const LIVE_TTL_SECONDS = 6;
+export const FINAL_TTL_SECONDS = 300;
+
+export function snapshotTtlSeconds(raw: any): number {
+  return raw?.gameData?.status?.abstractGameState === 'Final'
+    ? FINAL_TTL_SECONDS
+    : LIVE_TTL_SECONDS;
+}
+
 // Home win probability for a finished game: 1 for a home win, 0 for a home
 // loss, 0.5 for a tie (suspended or called games can end level).
 export function finalWinProbability(homeScore: number, awayScore: number): number {

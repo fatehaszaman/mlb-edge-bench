@@ -12,18 +12,13 @@
 //   cache, so upstream load drops to ~1 request per game per 6s per colo. The Durable-Object-based fanout is on a separate branch
 //   for when this graduates to the paid plan.
 
-import { GameSnapshot, extractSnapshot } from './snapshot';
+import { GameSnapshot, extractSnapshot, snapshotTtlSeconds } from './snapshot';
 import { DASHBOARD_HTML } from './dashboard';
 
 export interface Env {}
 
 const MLB_FEED = (gameId: string) =>
   `https://statsapi.mlb.com/api/v1.1/game/${gameId}/feed/live`;
-
-// Live games keep a short TTL so the edge never serves data staler than MLB's
-// own 10s cache. A Final game no longer changes, so it can be held longer.
-const LIVE_TTL_SECONDS = 6;
-const FINAL_TTL_SECONDS = 300;
 
 export default {
   async fetch(
@@ -102,8 +97,7 @@ async function handleSnapshot(
       );
     }
 
-    const isFinal = raw?.gameData?.status?.abstractGameState === 'Final';
-    const ttl = isFinal ? FINAL_TTL_SECONDS : LIVE_TTL_SECONDS;
+    const ttl = snapshotTtlSeconds(raw);
 
     const response = Response.json(snap, { headers: corsHeaders('MISS') });
     ctx.waitUntil(
