@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml/badge.svg)](https://github.com/fatehaszaman/mlb-edge-bench/actions/workflows/ci.yml)
 
-**A browser-based benchmark comparing MLB's Stats API origin with a Cloudflare Worker edge layer: latency, payload size and cache hit rate, measured live from your own browser.**
+**A browser-based benchmark comparing MLB's public Stats API feed with a Cloudflare Worker edge layer: latency, payload size and cache hit rate, measured live from your own browser.**
 
 > **Live demo:** [mlb-edge-bench.fatehaszaman.workers.dev](https://mlb-edge-bench.fatehaszaman.workers.dev)
 
@@ -17,7 +17,7 @@
 | Edge cache (free tier) | `main` | **Live** at the demo link | The Worker slims the GUMBO feed and stores it in `caches.default`, so roughly one upstream request per game per 6 seconds **per Cloudflare colo** while the game is live (Final games are cached for 5 minutes). Viewers poll the snapshot endpoint. |
 | Durable Objects + SSE (paid tier) | [`paid-tier`](https://github.com/fatehaszaman/mlb-edge-bench/tree/paid-tier) | Not deployed | One Durable Object per `gamePk` polls upstream every 6 seconds and pushes diffs to every subscriber over Server-Sent Events, giving one upstream request per game globally. `/api/game/:id/stats` and `/stream` exist only on this branch. |
 
-The architecture and wire-format sections below describe the paid-tier design. The ASCII dashboard is illustrative, not a recorded run. On the live build, p50/p95/p99 are computed for the direct column; the edge column reports p50/p95/p99 latency, bytes, cache hit rate and serving location.
+The architecture and wire-format sections below describe the paid-tier design. The ASCII dashboard is illustrative, not a recorded run. On the live build, p50/p95/p99 are computed for the direct column; the edge column reports p50/p95/p99 latency, separate p50/p95 for cache hits and misses, bytes, cache hit rate and serving location.
 
 ---
 
@@ -30,7 +30,7 @@ The benchmark dashboard is the proof. Two columns, same game, same browser:
 - The **left** column calls `statsapi.mlb.com/api/v1.1/game/{gamePk}/feed/live` directly from your browser.
 - The **right** column hits the Cloudflare Worker's slimmed snapshot endpoint (free tier) or subscribes via SSE (paid tier).
 
-The direct column reports p50/p95/p99 latency and payload size, while the edge column reports p50/p95/p99 latency, bytes, cache hit rate and serving location, each paired with a live sparkline. The numbers are real and come from your own browser's `performance.now()` across a rolling 60-sample window.
+The direct column reports p50/p95/p99 latency and payload size, while the edge column reports p50/p95/p99 latency, separate p50/p95 for cache hits and misses, bytes, cache hit rate and serving location, each paired with a live sparkline. The numbers are real and come from your own browser's `performance.now()` across a rolling 60-sample window.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -52,7 +52,7 @@ The direct column reports p50/p95/p99 latency and payload size, while the edge c
 
 I was curious how much an edge layer would actually save for live MLB game data, measured end-to-end from a real client. The full GUMBO feed for one game is ~400–800 KB and updates every few seconds. The interesting question wasn't "can I cache it on the edge" - that's obvious. It was **"what does the edge actually buy you when measured the way a fan would experience it."** So I built a benchmark that runs both calls from the same client and surfaces the diff.
 
-The framing is exploratory, not a critique. MLB's Stats API is a well-built single-origin service that's served fans well for a long time. This is one engineer engaging with a question that the people running mlb.com's edge already think about.
+The framing is exploratory, not a critique. MLB's Stats API is a well-built service that's served fans well for a long time. This is one engineer engaging with a question that the people running mlb.com's edge already think about.
 
 ## Architecture
 
@@ -124,6 +124,7 @@ It's intentionally **not** the centerpiece. The centerpiece is the delivery laye
 
 ## Limitations & honest caveats
 
+- **The direct column is already CDN-cached.** MLB's feed is not served straight from an origin server; it comes from a CDN cache (`max-age=10`). On fast broadband, a ~750 KB download from a nearby cache adds only a few milliseconds, so the latency gap between the columns can be small. The edge layer's main win is payload: roughly 750 KB down to under 1 KB per update. That matters most on mobile and slow networks. To see it, open Chrome DevTools, set Network throttling to **Fast 3G**, and reload the dashboard.
 - This is a personal exploration project, not a load test. The dashboard runs the two fetches one after the other from the same browser, alternating which goes first, so the large direct download doesn't compete with the edge request for bandwidth.
 - **Numbers are local to the viewer.** Latency depends heavily on your ISP, the route your packets take, and which Cloudflare colo Anycast lands you in. A user in Mumbai and a user in Newark will see very different absolute numbers from the same dashboard. Treat the spread between columns as the signal, not the absolute ms. A production version would log every request server-side via Analytics Engine and report percentiles across all real users.
 - **Cache hit rate is surfaced alongside latency** because latency without hit rate is misleading. A cold colo still pays the upstream cost; the dashboard shows the HIT/total ratio so you can tell which regime you're observing.
